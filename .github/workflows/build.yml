@@ -11,6 +11,9 @@ jobs:
       - name: Kaynak kodu al
         uses: actions/checkout@v4
 
+      - name: MSBuild'i hazırla
+        uses: microsoft/setup-msbuild@v2
+
       - name: Projeyi derle
         shell: pwsh
         run: |

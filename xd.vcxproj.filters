@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Core">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Driver">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Features">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{91c62575-8d07-433a-9f5c-cf9700ebd5d1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets">
+      <UniqueIdentifier>{17402566-984b-4f82-8154-8b49c136450d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Protection">
+      <UniqueIdentifier>{a0722ac7-08d9-4cac-a2a6-16a5a76e4b12}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Auth">
+      <UniqueIdentifier>{b1e98e4b-2134-4f30-81af-4d085e98a917}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ImGui">
+      <UniqueIdentifier>{5c7291b4-9c07-435f-987a-3addceeba90b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Core\main.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Driver\driver.cpp">
+      <Filter>Driver</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\custom_widgets.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_demo.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_draw.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_tables.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\backends\imgui_impl_dx9.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\backends\imgui_impl_win32.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_widgets.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Core\main.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\include.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Driver\driver.h">
+      <Filter>Driver</Filter>
+    </ClInclude>
+    <ClInclude Include="Driver\driver_blob.h">
+      <Filter>Driver</Filter>
+    </ClInclude>
+    <ClInclude Include="Driver\driver_extract.h">
+      <Filter>Driver</Filter>
+    </ClInclude>
+    <ClInclude Include="Driver\DriverOffsets.h">
+      <Filter>Driver</Filter>
+    </ClInclude>
+    <ClInclude Include="Features\cheats.h">
+      <Filter>Features</Filter>
+    </ClInclude>
+    <ClInclude Include="Features\check.h">
+      <Filter>Features</Filter>
+    </ClInclude>
+    <ClInclude Include="Features\heysup.h">
+      <Filter>Features</Filter>
+    </ClInclude>
+    <ClInclude Include="Features\structs.h">
+      <Filter>Features</Filter>
+    </ClInclude>
+    <ClInclude Include="Features\valorant.h">
+      <Filter>Features</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\custom_widgets.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\widgets_colors.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\settings_menu.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\theme.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\agenticons.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\fonts.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\fonthelper.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\icons.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\images.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\inter_bold.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\inter_regular.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\kz_logo.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\layre_logo.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\LOGO.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\stb_image.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Assets\zalo_logo.h">
+      <Filter>Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\antidebug.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\lazy.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\vmprotect.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\vxlib.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\security.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\base64.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\call_spoof.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\Encrypt.hpp">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\encryption.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\LAZYSHIT.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\LEZY.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Protection\xor.h">
+      <Filter>Protection</Filter>
+    </ClInclude>
+    <ClInclude Include="Auth\skStr.h">
+      <Filter>Auth</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imconfig.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\backends\imgui_impl_dx9.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\backends\imgui_impl_win32.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_internal.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_rectpack.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_textedit.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_truetype.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

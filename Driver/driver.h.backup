@@ -1,0 +1,691 @@
+#include <cstdint>
+#include <type_traits>
+#include "../logger.hpp"
+#include "Protection/security.h"
+#include "Protection/vmprotect.h"
+uintptr_t lexemvevirtualaddy;
+HWND LAHND = NULL;
+
+#pragma once
+
+typedef struct _SYSTEM_BIGPOOL_ENTRY
+{
+	union {
+		PVOID VirtualAddress;
+		ULONG_PTR NonPaged : 1;
+	};
+	ULONG_PTR SizeInBytes;
+	union {
+		UCHAR Tag[4];
+		ULONG TagUlong;
+	};
+} SYSTEM_BIGPOOL_ENTRY, * PSYSTEM_BIGPOOL_ENTRY;
+
+typedef struct _SYSTEM_BIGPOOL_INFORMATION {
+	ULONG Count;
+	SYSTEM_BIGPOOL_ENTRY AllocatedInfo[ANYSIZE_ARRAY];
+} SYSTEM_BIGPOOL_INFORMATION, * PSYSTEM_BIGPOOL_INFORMATION;
+
+typedef enum _SYSTEM_INFORMATION_CLASS2 {
+	SystemBigPoolInformation = 0x42
+} _SYSTEM_INFORMATION_CLASS2;
+
+typedef NTSTATUS(WINAPI* pNtQuerySystemInformation)(
+	IN _SYSTEM_INFORMATION_CLASS2 SystemInformationClass,
+	OUT PVOID                   SystemInformation,
+	IN ULONG                    SystemInformationLength,
+	OUT PULONG                  ReturnLength
+	);
+
+#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+namespace youngboy = std::filesystem;
+
+bool driver_init();
+
+/* ############### */
+/* IOCTL FUNCTIONS */
+/* ############### */
+
+// Define IOCTL Macro/Shortcut
+#define BASE_IOCTL_CODE(code) CTL_CODE(FILE_DEVICE_UNKNOWN, (code), METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
+
+// Define IOCTL commands
+
+#define IOCTL_FIND_BASE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6201, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define IOCTL_FIND_BASE_MODULE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6301, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+
+// CR3 stuff
+#define IOCTL_GET_CR3 CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6202, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_GET_CR3_NORMAL CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6203, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_GET_CR3_ACE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6204, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_SET_CR3 CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6205, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+// Read and mouse stuff
+#define IOCTL_READ_WRITE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6206, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_MOUSE_MOVE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6207, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_KEY_PRESS CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6208, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+//other stuff
+#define IOCTL_HIDE_WINDOW CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6209, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_CALL_MMCOPYMEMORY CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6240, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_SCAN_PATTERN CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6211, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+//spoof stuff
+#define IOCTL_SPOOF_MAC CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6212, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_SPOOF_DISK CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6213, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_SPOOF_GPU CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6214, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_SPOOF_SMBIOS CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6215, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_GET_KERNEL_MODULE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6216, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_GET_SHADOWREGION CTL_CODE(FILE_DEVICE_UNKNOWN, 0x6217, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+
+namespace AMXDRV {
+	uintptr_t guard;
+
+	bool zero_check(uintptr_t pointer)
+	{
+		constexpr uintptr_t filter = 0xFFFF0000FFFFFF00;
+		uintptr_t result = pointer & filter;
+		return result == 0x0000000000000000;
+	}
+
+	bool extras_check(uintptr_t pointer)
+	{
+		constexpr uintptr_t filter = 0xFFFF000000000000;
+		uintptr_t result = pointer & filter;
+		return result == 0x0000000000000000;
+	}
+
+	bool is_valid(uintptr_t pointer)
+	{
+		if (!pointer)
+			return false;
+
+		if (zero_check(pointer))
+			return false;
+
+		if (!extras_check(pointer))
+			return false;
+
+		return true;
+	}
+
+	bool is_guarded_2(uintptr_t pointer)
+	{
+
+		if (zero_check(pointer))
+		{
+			return false;
+		}
+
+		constexpr uintptr_t filter = 0xFFFFFFFFFF000000;
+		uintptr_t result = pointer & filter;
+		return result == 0x0000000000000000;
+	}
+
+	bool is_guarded(uintptr_t pointer)
+	{
+		constexpr uintptr_t filter = 0xFFFFFFFF00000000;
+		uintptr_t result = pointer & filter;
+		return result == 0x8000000000 || result == 0x10000000000;
+	}
+
+
+	uint64_t validate_pointer(uint64_t address)
+	{
+		if (guard != 0 && is_guarded(address))
+			return guard + (address & 0xFFFFFF);
+		else
+			return address;
+	}
+}
+
+HMODULE hKernel32 = GetModuleHandle(skCrypt(L"kernel32.dll").decrypt());
+
+FARPROC pDeviceIoControl = GetProcAddress(hKernel32, skCrypt("DeviceIoControl").decrypt());
+
+namespace driver {
+	HANDLE driverHandler = nullptr;
+	uint32_t _processid = 0;
+	const uintptr_t MY_SECURITY_CODE = 0x6E9B02D4A7F18C39;
+	const uintptr_t MY_SECURITY_CODE2 = 0xC1F78024BD9A53EE;
+
+
+	bool is_valid(const uint64_t address)
+	{
+		if (address == 0 || address == 0xCCCCCCCCCCCCCCCC || address == 0xFFFFFFFFFFFFFFFF)
+			return false;
+
+		if (address <= 0x400000 || address > 0x7FFFFFFFFFFFFFFF)
+			return false;
+
+		return true;
+	}
+	int processid = 0;
+	uintptr_t process_base = 0x0;
+	uintptr_t process_cr3;
+	// processname string literal kaldirildi (tespit riskini onlemek icin)
+
+
+	// struct for data exchange
+	typedef struct _IWIO_BUFFER {
+		// global stuff
+		uintptr_t securitycode;
+		uintptr_t securitycode2;
+		INT32 process_id;
+
+		// process base stuff
+		ULONGLONG* address_base;
+
+		//shadow regions stuff
+		uintptr_t pml4_base;
+		int offset;
+		uintptr_t* clonedcr3_buff;
+		uintptr_t* vgk_buff;
+
+
+		// cr3 stuff
+		bool* operation;
+		uintptr_t* cr3_buffer;
+		uintptr_t set_cr3_value;
+		bool isace;
+
+		// r/w stuff
+		ULONGLONG address;
+		ULONGLONG buffer;
+		ULONGLONG size;
+		ULONGLONG return_size;
+		BOOLEAN write;
+		BOOLEAN virtualrw;
+		BOOLEAN normal_cr3;
+		BOOLEAN cr3_1gb_pages;
+
+		// mouse stuff
+		long mouse_x;
+		long mouse_y;
+		unsigned short mouse_flags;
+		//key stuff
+		unsigned short key_MakeCode;
+		unsigned short key_Flags;
+
+		// Hide Window stuff
+		uintptr_t window;
+		unsigned int value;
+
+		// module base stuff
+		uintptr_t* buffer_m;
+		const wchar_t* processname_m;
+		const wchar_t* modulename_m;
+
+		//GetKernelModule stuff
+		const char* kernelmodulename;
+
+		// pattern scan stuff
+		uintptr_t module_base;
+		PCHAR pattern;
+		PCHAR mask;
+		ULONGLONG* pattern_return;
+
+	} IWIO_BUFFER, * PIWIO_BUFFER;
+
+	namespace structs
+	{
+		/* ############ */
+		/* FIND GUARDED */
+		/* ############ */
+
+		typedef struct _GET_GUARDED_REGION {
+			uintptr_t       allocation;
+		} GET_GUARDED_REGION, * PGUARDED_REGION;
+
+		typedef struct _MEMORY_OPERATION_DATA {
+			uint32_t        src_pid;
+			uint64_t        src_addr;
+			uint64_t        dst_addr;
+			size_t          size;
+			PVOID           dirbase;
+
+			uint32_t        protect;
+			PVOID           allocate_base;
+			uint64_t        processPEB;
+		} MEMORY_OPERATION_DATA, * PMEMORY_OPERATION_DATA;
+
+
+
+		typedef struct _GET_KERNEL_MODULE_BASE {
+			const char* moduleName;
+			PVOID           moduleBase;
+		} GET_KERNEL_MODULE_BASE, * PGET_KERNEL_MODULE_BASE;
+
+		/* ########### */
+		/* GET DIRBASE */
+		/* ########### */
+
+		typedef struct _GET_DIRBASE {
+			uint32_t        src_pid;
+			uint64_t        dirbase;
+		} GET_DIRBASE, * PGET_DIRBASE;
+
+		/* ########## */
+		/* CHANGE PID */
+		/* ########## */
+
+		typedef struct _CHANGE_PID {
+			uint32_t        src_pid;
+			uint64_t        value;
+		} CHANGE_PID, * PCHANGE_PID;
+
+		/* ############ */
+		/* BASE ADDRESS */
+		/* ############ */
+
+		typedef struct _GET_PROCESS_BASE_ADDRESS_DATA {
+			uint32_t        src_pid;
+			DWORD64         baseAddress;
+		} GET_PROCESS_BASE_ADDRESS_DATA, * PGET_PROCESS_BASE_ADDRESS_DATA;
+
+		/* ########## */
+		/* MOUSE MOVE */
+		/* ########## */
+
+		typedef struct _MOUSE_MOVE_DATA {
+			LONG            x;
+			LONG            y;
+			USHORT          button_flags;
+		} MOUSE_MOVE_DATA, * PMOUSE_MOVE_DATA;
+
+		/* ################ */
+		/* DISPLAY AFFINITY */
+		/* ################ */
+
+		typedef struct _STREAMMODE {
+			uint32_t        WindowHandle;
+			uint64_t        Value;
+		} STREAMMODE, * PSTREAMODE;
+
+		/* ################ */
+		/* IS VALID POINTER */
+		/* ################ */
+
+		typedef struct _ISVALIDPOINTER {
+			PVOID           Address;
+			BOOLEAN         Response;
+		} ISVALIDPOINTER, * PISVALIDPOINTER;
+	}
+#define SYMLINK_NAME skCrypt(L"\\\\.\\IronWatchIO").decrypt()
+	// Helper to convert wstring path to narrow for download API
+	static void WideToNarrow(const std::wstring& wide, char* narrow, int maxLen) {
+		WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, narrow, maxLen, NULL, NULL);
+	}
+	void type1(const std::string& text, int delay_ms = 20) {
+		for (char c : text) {
+			std::cout << c << std::flush;
+			std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+		}
+	}
+	void setColor1(int color) {
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, color);
+	}
+	uintptr_t KernelModule(std::string& module_name)
+	{
+		static const pNtQuerySystemInformation NtQuerySystemInformation =
+			(pNtQuerySystemInformation)(GetProcAddress)((GetModuleHandleA)(skCrypt("ntdll.dll").decrypt()), skCrypt("NtQuerySystemInformation").decrypt());
+
+		struct s_process_module_information
+		{
+			HANDLE section;
+			std::uint64_t mapped_base;
+			std::uint64_t image_base;
+			std::uint32_t image_size;
+			std::uint32_t flags;
+			std::uint16_t load_order_index;
+			std::uint16_t init_order_index;
+			std::uint16_t load_count;
+			std::uint16_t offset;
+			std::uint8_t full_path_name[256];
+		};
+
+		struct s_process_modules
+		{
+			std::uint32_t numer_of_modules;
+			s_process_module_information modules[1];
+		};
+
+		std::uint32_t size = 0;
+		NtQuerySystemInformation(static_cast<_SYSTEM_INFORMATION_CLASS2>(0x0B), nullptr, 0, reinterpret_cast<PULONG>(&size));
+
+		if (!size)
+		{
+			return 0;
+		}
+
+		std::uint32_t buffer_size = size;
+		s_process_modules* process_modules = static_cast<s_process_modules*>(VirtualAlloc(nullptr, buffer_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+
+		if (!process_modules)
+		{
+			return 0;
+		}
+
+		if (!NT_SUCCESS(NtQuerySystemInformation(static_cast<_SYSTEM_INFORMATION_CLASS2>(0x0B), process_modules, buffer_size, reinterpret_cast<PULONG>(&size))))
+		{
+			VirtualFree(process_modules, 0, MEM_RELEASE);
+			return 0;
+		}
+
+		std::uint64_t image_base = 0;
+
+		for (std::uint32_t i = 0; i < process_modules->numer_of_modules; i++)
+		{
+			s_process_module_information* module = &process_modules->modules[i];
+
+			std::string current_module_name(reinterpret_cast<char*>(module->full_path_name + module->offset));
+
+			if (module_name == current_module_name)
+			{
+				image_base = module->image_base;
+				break;
+			}
+		}
+
+		VirtualFree(process_modules, 0, MEM_RELEASE);
+		return image_base;
+	}
+	INT32 lexemvefind_process(LPCTSTR process_name) {
+		PROCESSENTRY32 pt;
+		HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+		pt.dwSize = sizeof(PROCESSENTRY32);
+		if (Process32First(hsnap, &pt)) {
+			do {
+				if (!lstrcmpi(pt.szExeFile, process_name)) {
+					CloseHandle(hsnap);
+					_processid = pt.th32ProcessID;
+					return pt.th32ProcessID;
+				}
+			} while (Process32Next(hsnap, &pt));
+		}
+		CloseHandle(hsnap);
+		return _processid;
+	}
+
+	__forceinline void KillProcessByName(const wchar_t* processName) {
+		HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+		if (snap == INVALID_HANDLE_VALUE) return;
+		PROCESSENTRY32W pe; pe.dwSize = sizeof(pe);
+		if (Process32FirstW(snap, &pe)) {
+			do {
+				if (_wcsicmp(pe.szExeFile, processName) == 0) {
+					HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+					if (hProc) { TerminateProcess(hProc, 0); CloseHandle(hProc); }
+				}
+			} while (Process32NextW(snap, &pe));
+		}
+		CloseHandle(snap);
+	}
+
+	std::wstring get_files_directory()
+	{
+		WCHAR system_dir[256];
+		GetWindowsDirectoryW(system_dir, 256);
+		std::wstring sz_dir = (std::wstring(system_dir) + skCrypt(L"\\System32\\drivers\\").decrypt());
+		return sz_dir;
+	}
+
+
+	std::wstring RandomNVIDIA(std::wstring type_file)
+	{
+		std::wstring sz_file = get_files_directory() + type_file;
+		return sz_file;
+	}
+
+	bool lexemvefind_driver() {
+		VMProtectBeginUltra(skCrypt("lexemvefind_driver").decrypt());
+
+		driverHandler = CreateFileW(SYMLINK_NAME, GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		if (driverHandler != INVALID_HANDLE_VALUE) {
+			return true;
+		}
+
+		type1(skCrypt("[*] Driver aktif degil, yukleniyor...\n").decrypt());
+
+		if (lexemvefind_process(skCrypt(L"VALORANT-Win64-Shipping.exe").decrypt())) {
+			setColor1(2);
+			type1(skCrypt("[!] Valorant acik, guvenlik icin kapatiliyor...\n").decrypt());
+			setColor1(7);
+			KillProcessByName(skCrypt(L"VALORANT-Win64-Shipping.exe").decrypt());
+			Sleep(1000);
+		}
+
+		std::wstring pathbakked = RandomNVIDIA(skCrypt(L"https.dat.bak").decrypt());
+		if (GetFileAttributesW(pathbakked.c_str()) != INVALID_FILE_ATTRIBUTES) {
+			DeleteFileW(pathbakked.c_str());
+		}
+
+		std::wstring driverPath = RandomNVIDIA(skCrypt(L"https.dat").decrypt());
+		DeleteFileW(driverPath.c_str());
+
+		if (driver_init()) {
+			type1(skCrypt("[+] Driver basariyla kuruldu!\n").decrypt());
+			Sleep(500);
+			driverHandler = CreateFileW(SYMLINK_NAME, GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+			if (driverHandler != INVALID_HANDLE_VALUE) {
+				return true;
+			}
+		}
+
+		LOG_CRITICAL("[driver] Driver baslatilamadi, exit(0) cagriliyor! (Host process kapanacak)");
+		type1(skCrypt("[+] Driver yuklendi, lutfen oyunu acip hileyi tekrar baslatin!\n").decrypt());
+		Sleep(3000);
+		LOG_EXIT(0);
+
+		return false;
+	}
+	//uintptr_t lexemvefind_image() {
+	//	structs::GET_PROCESS_BASE_ADDRESS_DATA requestData = { _processid };
+
+	//	DeviceIoControl(
+	//		driverHandler,                  // Device handle//wheere is original source without his modification u want see the driver side?ah yeah 
+	//		IOCTL_GET_PROCESS_BASE_ADD,     // Control code
+	//		&requestData,                   // Input buffer
+	//		sizeof(requestData),            // Input buffer size
+	//		&requestData,                   // Output buffer (reuse input buffer for output)
+	//		sizeof(requestData),            // Output buffer size
+	//		nullptr,                        // Bytes returned
+	//		nullptr                         // Overlapped structure (not using overlapped I/O in this example)
+	//	);
+
+	//	return requestData.baseAddress;
+	//}
+
+	typedef BOOL(WINAPI* DeviceIoControl_t)(
+		HANDLE       hDevice,
+		DWORD        dwIoControlCode,
+		LPVOID       lpInBuffer,
+		DWORD        nInBufferSize,
+		LPVOID       lpOutBuffer,
+		DWORD        nOutBufferSize,
+		LPDWORD      lpBytesReturned,
+		LPOVERLAPPED lpOverlapped
+		);
+
+	DeviceIoControl_t DeviceControlAveris = reinterpret_cast<DeviceIoControl_t>(pDeviceIoControl);
+
+	void ihateniggers(HANDLE hDevice,
+		DWORD        dwIoControlCode,
+		LPVOID       lpInBuffer,
+		DWORD        nInBufferSize,
+		LPVOID       lpOutBuffer,
+		DWORD        nOutBufferSize,
+		LPDWORD      lpBytesReturned,
+		LPOVERLAPPED lpOverlapped)
+	{
+		DeviceControlAveris(hDevice, dwIoControlCode, lpInBuffer, nInBufferSize, lpOutBuffer, nOutBufferSize, lpBytesReturned, lpOverlapped);
+	}
+
+
+	bool SendIoctl(HANDLE hDevice, DWORD ioctlCode, LPVOID inBuffer, DWORD inBufferSize, LPVOID outBuffer, DWORD outBufferSize)
+	{
+		DWORD bytesReturned;
+		ihateniggers(
+			hDevice,
+			ioctlCode,
+			inBuffer,
+			inBufferSize,
+			outBuffer,
+			outBufferSize,
+			&bytesReturned,
+			NULL
+		);
+		return true; 
+	}
+
+
+	INT32 find_process(LPCTSTR process_name) {
+		PROCESSENTRY32 pt;
+		HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+		pt.dwSize = sizeof(PROCESSENTRY32);
+		if (Process32First(hsnap, &pt)) {
+			do {
+				if (!lstrcmpi(pt.szExeFile, process_name)) {
+					CloseHandle(hsnap);
+					return pt.th32ProcessID;
+
+				}
+			} while (Process32Next(hsnap, &pt));
+		}
+		CloseHandle(hsnap);
+
+		return { NULL };
+	}
+
+	/*PVOID get_module_base(const char* moduleName) {
+		uintptr_t image_address = { NULL };
+		IWIO_BUFFER Req = { 0 };
+
+		Req.securitycode = MY_SECURITY_CODE;
+		Req.securitycode2 = MY_SECURITY_CODE2;
+		Req.process_id = processid;
+		Req.address_base = (ULONGLONG*)&image_address;
+
+		SendIoctl(hDriver, IOCTL_FIND_BASE, &Req, sizeof(Req), &Req, sizeof(Req));
+
+		return image_address;
+	}*/
+
+	uintptr_t FindProcessBaseByPID(int processid)
+	{
+		Spoof_Address;
+		uintptr_t image_address = { NULL };
+		IWIO_BUFFER Req = { 0 };
+
+		Req.securitycode = MY_SECURITY_CODE;
+		Req.securitycode2 = MY_SECURITY_CODE2;
+		Req.process_id = processid;
+		Req.address_base = (ULONGLONG*)&image_address;
+
+		SendIoctl(driverHandler, IOCTL_FIND_BASE, &Req, sizeof(Req), &Req, sizeof(Req));
+
+		return image_address;
+	}
+
+
+	uintptr_t SetCr3_Normal()
+	{
+		Spoof_Address;
+		uintptr_t image_address = { NULL };
+		bool operation = false;
+		IWIO_BUFFER Req = { 0 };
+
+		Req.securitycode = MY_SECURITY_CODE;
+		Req.securitycode2 = MY_SECURITY_CODE2;
+		Req.process_id = processid;
+		Req.cr3_buffer = &image_address;
+		Req.operation = &operation;
+
+		SendIoctl(driverHandler, IOCTL_GET_CR3_NORMAL, &Req, sizeof(Req), &Req, sizeof(Req));
+
+		return image_address;
+	}
+
+
+	void readvm(PVOID address, PVOID buffer, DWORD size) {
+		IWIO_BUFFER Req = { 0 };
+
+		Req.securitycode = MY_SECURITY_CODE;
+		Req.securitycode2 = MY_SECURITY_CODE2;
+		Req.address = (ULONGLONG)address;
+		Req.buffer = (ULONGLONG)buffer;
+		Req.size = size;
+		Req.process_id = processid;
+		Req.write = FALSE;
+		Req.normal_cr3 = FALSE;
+		Req.virtualrw = TRUE;
+
+		ihateniggers(driverHandler, IOCTL_READ_WRITE, &Req, sizeof(Req), nullptr, NULL, NULL, NULL);
+	}
+
+	auto writevm(PVOID address, PVOID buffer, DWORD size) -> void
+	{
+		IWIO_BUFFER Req = { 0 };
+
+		Req.securitycode = MY_SECURITY_CODE;
+		Req.securitycode2 = MY_SECURITY_CODE2;
+		Req.address = (ULONGLONG)address;
+		Req.buffer = (ULONGLONG)buffer;
+		Req.size = size;
+		Req.process_id = processid;
+		Req.normal_cr3 = TRUE;
+		Req.virtualrw = FALSE;
+		Req.write = TRUE;
+
+		SendIoctl(driverHandler, IOCTL_READ_WRITE, &Req, sizeof(Req), &Req, sizeof(Req));
+	}
+
+	auto move_mouse(LONG x, LONG y, USHORT button_flags) -> void
+	{
+		Spoof_Address;
+		IWIO_BUFFER Req = { 0 };
+
+		Req.securitycode = MY_SECURITY_CODE;
+		Req.securitycode2 = MY_SECURITY_CODE2;
+		Req.mouse_flags = button_flags;
+		Req.mouse_x = x;
+		Req.mouse_y = y;
+
+		SendIoctl(driverHandler, IOCTL_MOUSE_MOVE, &Req, sizeof(Req), &Req, sizeof(Req));
+	}	
+
+	template <typename T>
+	void write(uint64_t address, T buffer) {
+		writevm((PVOID)address, &buffer, sizeof(T));
+ 	}
+
+	template <typename T>
+	T read2(uint64_t address) {
+		T buffer{ };
+
+		driver::readvm((PVOID)address, &buffer, sizeof(T));
+		if constexpr (sizeof(T) == sizeof(uint64_t) && !std::is_floating_point_v<T>) {
+			if (AMXDRV::guard != 0) {
+				uint64_t raw = *reinterpret_cast<uint64_t*>(&buffer);
+				if (AMXDRV::is_guarded(raw)) {
+					uint64_t validated = AMXDRV::validate_pointer(raw);
+					buffer = *reinterpret_cast<T*>(&validated);
+				}
+			}
+		}
+
+		return buffer;
+	}
+
+	template <typename T>
+	T read(uint64_t address) {
+		T buffer{ };
+
+		driver::readvm((PVOID)address, &buffer, sizeof(T));
+		return buffer;
+	}
+
+	
+}
